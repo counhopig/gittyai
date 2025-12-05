@@ -41,3 +41,6 @@ examples/config_example
 # Config files with secrets
 *_local.yaml
 *_secret.yaml
+
+# Ignore cmd binaries
+cmd/
