@@ -1,0 +1,27 @@
+project: simple-research
+version: 1.0
+
+agents:
+  - name: researcher
+    role: Research Analyst
+    goal: Gather comprehensive information from various sources
+    backstory: You are an expert research analyst with a knack for finding
+      relevant information and synthesizing it into clear, actionable insights.
+    verbose: true
+    max_iter: 15
+    max_rpm: 10
+
+tasks:
+  - description: Research the latest developments in AI agent frameworks
+    expected_output: A comprehensive summary of the current state of AI agent frameworks
+    agent: researcher
+
+execution:
+  process: sequential
+
+llm:
+  provider: openai
+  api_key: ${OPENAI_API_KEY}
+  model: gpt-4o-mini
+  temperature: 0.7
+  max_tokens: 2000
