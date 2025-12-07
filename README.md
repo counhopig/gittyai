@@ -11,10 +11,12 @@ Gitty is a lightweight, easy-to-use AI Agent framework written in Go. Inspired b
 - 🚀 **Simple & Intuitive**: Get started in minutes with minimal setup
 - 🤖 **Multi-Agent Orchestration**: Coordinate multiple agents with different roles
 - ⚡ **True Concurrency**: Built on Go's goroutines for parallel execution
-- 🎛️ **Flexible LLM Support**: Integrate with OpenAI, Anthropic, and more
+- 🎛️ **Flexible LLM Support**: Integrate with OpenAI, Anthropic, Ollama, Groq, Deepseek, and any OpenAI-compatible API
 - 💾 **Memory System**: Short-term and long-term memory for agents
 - 🔧 **Extensible**: Easy to add custom tools and integrations
 - 📄 **YAML Configuration**: Define agents and tasks in simple configuration files
+- 🌐 **OpenAI-Compatible API**: Support for any provider with OpenAI-compatible API (Azure, Ollama, LM Studio, vLLM, LocalAI, Together AI, etc.)
+- 🔌 **Plugin System**: Easy to add custom LLM providers and tools
 
 ## Installation
 
@@ -25,7 +27,6 @@ go get github.com/counhopig/gittyai
 ### Prerequisites
 
 - Go 1.21 or higher
-- API key for OpenAI or Anthropic (or other supported LLM provider)
 
 ## Quick Start
 
@@ -40,15 +41,15 @@ import (
     "log"
 
     "github.com/counhopig/gittyai/agent"
-    "github.com/counhopig/gittyai/crew"
     "github.com/counhopig/gittyai/llm"
+    "github.com/counhopig/gittyai/orchestrator"
     "github.com/counhopig/gittyai/task"
 )
 
 func main() {
-    // Create LLM provider
+    // Create LLM provider (configure as needed)
     llm, err := llm.NewOpenAI(llm.Config{
-        APIKey: "your-api-key",
+        APIKey: "your-openai-api-key",  // Configure your API key
         Model:  "gpt-4o-mini",
     })
     if err != nil {
@@ -71,19 +72,19 @@ func main() {
         Agent:          researcher,
     })
 
-    // Create and run the crew
-    crew := crew.New(crew.Config{
+    // Create and run the orchestrator
+    orch := orchestrator.New(orchestrator.Config{
         Agents:  []*agent.Agent{researcher},
         Tasks:   []*task.Task{researchTask},
-        Process: crew.Sequential,
+        Process: orchestrator.Sequential,
     })
 
-    results, err := crew.Kickoff(context.Background())
+    results, err := orch.Kickoff(context.Background())
     if err != nil {
         log.Fatal(err)
     }
 
-    fmt.Println(crew.FormatResults(results))
+    fmt.Println(orchestrator.FormatResults(results))
 }
 ```
 
@@ -111,8 +112,9 @@ execution:
   process: sequential
 
 llm:
-  provider: openai
-  api_key: ${OPENAI_API_KEY}
+  provider: openai-like  # Supports: openai, anthropic, openai-like
+  api_key: "your-api-key-here"  # Configure as needed
+  base_url: "https://api.openai.com/v1"  # Required for openai-like
   model: gpt-4o-mini
   temperature: 0.7
 ```
@@ -130,12 +132,12 @@ import (
 )
 
 func main() {
-    crew, err := config.BuildFromConfig("config.yaml")
+    orch, err := config.BuildFromConfig("config.yaml")
     if err != nil {
         log.Fatal(err)
     }
 
-    results, err := crew.Kickoff(context.Background())
+    results, err := orch.Kickoff(context.Background())
     if err != nil {
         log.Fatal(err)
     }
@@ -149,6 +151,7 @@ func main() {
 ### Agent
 
 An Agent is the core unit that performs tasks. It has:
+
 - **Identity**: Name, role, goal, and backstory
 - **Behavior**: Verbose mode, iteration limits, rate limits
 - **Memory**: Storage for past interactions
@@ -176,18 +179,18 @@ task := task.New(task.Config{
 })
 ```
 
-### Crew
+### Orchestrator
 
-A Crew orchestrates multiple agents to execute tasks:
+An Orchestrator coordinates multiple agents to execute tasks:
 
 ```go
-crew := crew.New(crew.Config{
+orch := orchestrator.New(orchestrator.Config{
     Agents:  []*agent.Agent{researcher, writer},
     Tasks:   []*task.Task{research, write},
-    Process: crew.Sequential, // or Parallel, Hierarchical
+    Process: orchestrator.Sequential, // or Parallel, Hierarchical
 })
 
-results, err := crew.Kickoff(ctx)
+results, err := orch.Kickoff(ctx)
 ```
 
 ### Process Types
@@ -223,13 +226,13 @@ review := task.New(task.Config{
 })
 
 // Execute workflow
-crew := crew.New(crew.Config{
+orch := orchestrator.New(orchestrator.Config{
     Agents:  []*agent.Agent{researcher, writer, reviewer},
     Tasks:   []*task.Task{research, write, review},
-    Process: crew.Sequential,
+    Process: orchestrator.Sequential,
 })
 
-results, _ := crew.Kickoff(ctx)
+results, _ := orch.Kickoff(ctx)
 ```
 
 ### Using Different LLM Providers
@@ -237,19 +240,50 @@ results, _ := crew.Kickoff(ctx)
 ```go
 // OpenAI
 openAI := llm.NewOpenAI(llm.Config{
-    APIKey: "your-openai-key",
+    APIKey: "your-openai-api-key",  // Configure as needed
     Model:  "gpt-4o",
 })
 
 // Anthropic Claude
 anthropic := llm.NewAnthropic(llm.Config{
-    APIKey: "your-anthropic-key",
+    APIKey: "your-anthropic-api-key",  // Configure as needed
     Model:  "claude-3-sonnet-20240229",
+})
+
+// Ollama (local LLM)
+ollama := llm.NewOpenAILike(llm.OpenAILikeConfig{
+    BaseURL: "http://localhost:11434/v1",  // Configure your Ollama server
+    Model:   "llama3.2",
+    // APIKey is optional for local Ollama
+})
+
+// Groq
+groq := llm.NewOpenAILike(llm.OpenAILikeConfig{
+    BaseURL: "https://api.groq.com/openai/v1",
+    APIKey:  "your-groq-api-key",  // Configure as needed
+    Model:   "mixtral-8x7b-32768",
+})
+
+// Deepseek
+deepseek := llm.NewOpenAILike(llm.OpenAILikeConfig{
+    BaseURL: "https://api.deepseek.com/v1",
+    APIKey:  "your-deepseek-api-key",  // Configure as needed
+    Model:   "deepseek-chat",
+})
+
+// Any OpenAI-compatible API
+custom := llm.NewOpenAILike(llm.OpenAILikeConfig{
+    BaseURL: "https://your-custom-api.com/v1",
+    APIKey:  "your-custom-api-key",  // Configure as needed
+    Model:   "your-model",
+    Headers: map[string]string{
+        "X-Custom-Header": "value",  // Custom headers if needed
+    },
 })
 
 // Use with agent
 agent := agent.New(agent.Config{
-    LLM: anthropic,
+    LLM: ollama,  // or any other provider
     // ...
 })
 ```
@@ -300,13 +334,13 @@ agent := agent.New(agent.Config{
 
 ```
 gittyai/
-├── agent/          # Agent definitions
-├── crew/           # Multi-agent orchestration
+├── agent/          # Agent definitions and management
+├── orchestrator/   # Multi-agent orchestration
 ├── task/           # Task management
-├── llm/            # LLM provider abstractions
+├── llm/            # LLM provider abstractions (OpenAI, Anthropic, OpenAI-compatible)
 ├── memory/         # Memory systems
 ├── tools/          # Tool integrations
-├── config/         # Configuration parsing
+├── config/         # Configuration parsing (YAML, builder)
 └── examples/       # Example projects
     ├── simple.yaml      # Basic configuration example
     ├── api_example.go   # Programmatic API example
@@ -317,46 +351,43 @@ gittyai/
 
 ### Agent Configuration
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Unique agent identifier |
-| `role` | string | Yes | Agent's role in the team |
-| `goal` | string | Yes | What the agent aims to accomplish |
-| `backstory` | string | Yes | Agent's persona and background |
-| `verbose` | boolean | No | Enable detailed logging (default: false) |
-| `max_iter` | integer | No | Maximum iterations (default: 25) |
-| `max_rpm` | integer | No | Max requests per minute (default: 10) |
-| `tools` | array | No | List of tool names enabled for this agent |
+| Field       | Type    | Required | Description                               |
+| ----------- | ------- | -------- | ----------------------------------------- |
+| `name`      | string  | Yes      | Unique agent identifier                   |
+| `role`      | string  | Yes      | Agent's role in the team                  |
+| `goal`      | string  | Yes      | What the agent aims to accomplish         |
+| `backstory` | string  | Yes      | Agent's persona and background            |
+| `verbose`   | boolean | No       | Enable detailed logging (default: false)  |
+| `max_iter`  | integer | No       | Maximum iterations (default: 25)          |
+| `max_rpm`   | integer | No       | Max requests per minute (default: 10)     |
+| `tools`     | array   | No       | List of tool names enabled for this agent |
 
 ### Task Configuration
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `description` | string | Yes | Task description |
-| `expected_output` | string | No | Expected result format |
-| `agent` | string | Yes | Agent name to assign |
-| `context` | array | No | Previous tasks to reference |
+| Field             | Type   | Required | Description                 |
+| ----------------- | ------ | -------- | --------------------------- |
+| `description`     | string | Yes      | Task description            |
+| `expected_output` | string | No       | Expected result format      |
+| `agent`           | string | Yes      | Agent name to assign        |
+| `context`         | array  | No       | Previous tasks to reference |
 
 ### LLM Configuration
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `provider` | string | Yes | LLM provider (openai, anthropic) |
-| `api_key` | string | Yes | API key for the provider |
-| `model` | string | No | Model name (defaults vary by provider) |
-| `temperature` | float | No | Generation randomness (0.0-2.0) |
-| `max_tokens` | integer | No | Maximum response tokens |
+| Field         | Type    | Required | Description                            |
+| ------------- | ------- | -------- | -------------------------------------- |
+| `provider`    | string  | Yes      | LLM provider (openai, anthropic, openai-like) |
+| `api_key`     | string  | Yes*     | API key for the provider (*optional for local providers) |
+| `base_url`    | string  | No       | API endpoint URL (required for openai-like) |
+| `model`       | string  | No       | Model name (defaults vary by provider) |
+| `temperature` | float   | No       | Generation randomness (0.0-2.0)        |
+| `max_tokens`  | integer | No       | Maximum response tokens                |
+| `headers`     | object  | No       | Custom HTTP headers (openai-like only) |
 
 ### Execution Configuration
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `process` | string | No | Execution mode: sequential, parallel, hierarchical |
-
-## Environment Variables
-
-- `OPENAI_API_KEY`: Your OpenAI API key
-- `ANTHROPIC_API_KEY`: Your Anthropic API key
+| Field     | Type   | Required | Description                                        |
+| --------- | ------ | -------- | -------------------------------------------------- |
+| `process` | string | No       | Execution mode: sequential, parallel, hierarchical |
 
 ## Examples
 
@@ -394,27 +425,33 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Roadmap
 
-- [x] Core agent/task/crew abstractions
+- [x] Core agent/task/orchestrator abstractions
 - [x] OpenAI and Anthropic integration
 - [x] YAML configuration support
 - [x] Sequential and parallel execution
+- [x] OpenAI-compatible API support (Ollama, Groq, Deepseek, etc.)
 - [ ] Concurrent streaming support
 - [ ] Advanced tool system
 - [ ] RAG-based long-term memory
 - [ ] Vector database integration
 - [ ] Web UI dashboard
-- [ ] CLI tools
-- [ ] More LLM providers
+- [ ] More LLM providers (Google Gemini, Cohere, etc.)
+- [ ] Plugin system for custom integrations
 
 ## Acknowledgments
 
 - Inspired by [CrewAI](https://github.com/crewAIInc/crewAI)
-- Built with [go-openai](https://github.com/sashabaranov/go-openai)
+- Thanks to the open-source Go community for libraries and tools
 
 ## Support
 
 For questions and support, please open an issue on the GitHub repository.
 
----
+## Recent Updates
 
-Made with ❤️ and Go
+- Added OpenAI-compatible API support for Ollama, Groq, Deepseek, and other providers
+- Enhanced LLM configuration with `openai-like` provider type
+- Updated roadmap to reflect current progress
+- Improved documentation with more examples and configuration options
+
+---
