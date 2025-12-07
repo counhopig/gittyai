@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/counhopig/gittyai/config"
-	"github.com/counhopig/gittyai/crew"
+	"github.com/counhopig/gittyai/orchestrator"
 )
 
 func configExample() {
@@ -20,10 +20,10 @@ func configExample() {
 		log.Fatalf("Config file not found: %s", configPath)
 	}
 
-	// Build crew from configuration
+	// Build orchestrator from configuration
 	c, err := config.BuildFromConfig(configPath)
 	if err != nil {
-		log.Fatalf("Failed to build crew from config: %v", err)
+		log.Fatalf("Failed to build orchestrator from config: %v", err)
 	}
 
 	fmt.Println("=== Running Agent from Config File ===")
@@ -33,5 +33,5 @@ func configExample() {
 		log.Fatalf("Execution failed: %v", err)
 	}
 
-	fmt.Println(crew.FormatResults(results))
+	fmt.Println(orchestrator.FormatResults(results))
 }

@@ -7,8 +7,8 @@ import (
 	"os"
 
 	"github.com/counhopig/gittyai/agent"
-	"github.com/counhopig/gittyai/crew"
 	"github.com/counhopig/gittyai/llm"
+	"github.com/counhopig/gittyai/orchestrator"
 	"github.com/counhopig/gittyai/task"
 )
 
@@ -59,37 +59,37 @@ func main() {
 		Agent:          writer,
 	})
 
-	// Create crew and execute
-	researchCrew := crew.New(crew.Config{
+	// Create orchestrator and execute
+	researchOrch := orchestrator.New(orchestrator.Config{
 		Agents:  []*agent.Agent{researcher},
 		Tasks:   []*task.Task{researchTask},
-		Process: crew.Sequential,
+		Process: orchestrator.Sequential,
 	})
 
 	fmt.Println("=== Running Simple Research Agent ===")
 	ctx := context.Background()
-	results, err := researchCrew.Kickoff(ctx)
+	results, err := researchOrch.Kickoff(ctx)
 	if err != nil {
 		log.Fatalf("Execution failed: %v", err)
 	}
 
-	fmt.Println(crew.FormatResults(results))
+	fmt.Println(orchestrator.FormatResults(results))
 
 	// Example 2: Multi-agent workflow
 	fmt.Println("\n=== Running Multi-Agent Workflow ===")
 
-	fullCrew := crew.New(crew.Config{
+	fullOrch := orchestrator.New(orchestrator.Config{
 		Agents:  []*agent.Agent{researcher, writer},
 		Tasks:   []*task.Task{researchTask, writeTask},
-		Process: crew.Sequential,
+		Process: orchestrator.Sequential,
 	})
 
-	results, err = fullCrew.Kickoff(ctx)
+	results, err = fullOrch.Kickoff(ctx)
 	if err != nil {
 		log.Fatalf("Multi-agent execution failed: %v", err)
 	}
 
-	fmt.Println(crew.FormatResults(results))
+	fmt.Println(orchestrator.FormatResults(results))
 }
 
 func getEnv(key, defaultValue string) string {

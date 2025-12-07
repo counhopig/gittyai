@@ -4,13 +4,13 @@ import (
 	"fmt"
 
 	"github.com/counhopig/gittyai/agent"
-	"github.com/counhopig/gittyai/crew"
 	"github.com/counhopig/gittyai/llm"
 	"github.com/counhopig/gittyai/memory"
+	"github.com/counhopig/gittyai/orchestrator"
 	"github.com/counhopig/gittyai/task"
 )
 
-// Builder helps construct a crew from a configuration
+// Builder helps construct an orchestrator from a configuration
 type Builder struct {
 	project *Project
 	agents  []*agent.Agent
@@ -119,8 +119,8 @@ func (b *Builder) GetTasks() []*task.Task {
 	return b.tasks
 }
 
-// Build constructs the crew from configuration
-func (b *Builder) Build() (*crew.Crew, error) {
+// Build constructs the orchestrator from configuration
+func (b *Builder) Build() (*orchestrator.Orchestrator, error) {
 	if err := b.BuildAgents(); err != nil {
 		return nil, err
 	}
@@ -129,23 +129,23 @@ func (b *Builder) Build() (*crew.Crew, error) {
 		return nil, err
 	}
 
-	var process crew.Process
+	var process orchestrator.Process
 	switch b.project.Execution.Process {
 	case "parallel":
-		process = crew.Parallel
+		process = orchestrator.Parallel
 	default:
-		process = crew.Sequential
+		process = orchestrator.Sequential
 	}
 
-	return crew.New(crew.Config{
+	return orchestrator.New(orchestrator.Config{
 		Agents:  b.agents,
 		Tasks:   b.tasks,
 		Process: process,
 	}), nil
 }
 
-// BuildFromConfig is a convenience function to build a crew directly from a config file
-func BuildFromConfig(configPath string) (*crew.Crew, error) {
+// BuildFromConfig is a convenience function to build an orchestrator directly from a config file
+func BuildFromConfig(configPath string) (*orchestrator.Orchestrator, error) {
 	project, err := LoadYAML(configPath)
 	if err != nil {
 		return nil, err
