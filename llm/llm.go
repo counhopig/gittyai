@@ -8,6 +8,33 @@ type LLM interface {
 	Generate(ctx context.Context, prompt string) (string, error)
 }
 
+// StructuredLLM extends LLM with structured output support
+type StructuredLLM interface {
+	LLM
+	// GenerateStructured sends a prompt and returns structured JSON response
+	// schema is a JSON schema that defines the expected output format
+	GenerateStructured(ctx context.Context, prompt string, schema *JSONSchema) (string, error)
+}
+
+// JSONSchema represents a JSON Schema for structured output
+type JSONSchema struct {
+	Name        string                 `json:"name"`
+	Description string                 `json:"description,omitempty"`
+	Schema      *SchemaDefinition      `json:"schema"`
+	Strict      bool                   `json:"strict,omitempty"`
+}
+
+// SchemaDefinition defines the structure of the expected output
+type SchemaDefinition struct {
+	Type                 string                        `json:"type"`
+	Properties           map[string]*SchemaDefinition  `json:"properties,omitempty"`
+	Items                *SchemaDefinition             `json:"items,omitempty"`
+	Required             []string                      `json:"required,omitempty"`
+	AdditionalProperties bool                          `json:"additionalProperties,omitempty"`
+	Enum                 []string                      `json:"enum,omitempty"`
+	Description          string                        `json:"description,omitempty"`
+}
+
 // Config represents the base configuration for an LLM
 type Config struct {
 	// API key for the provider
@@ -19,3 +46,4 @@ type Config struct {
 	// MaxTokens limits the response length
 	MaxTokens int
 }
+
