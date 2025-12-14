@@ -1,9 +1,8 @@
 package config
 
 import (
-	"fmt"
-
 	"github.com/counhopig/gittyai/agent"
+	"github.com/counhopig/gittyai/errors"
 	"github.com/counhopig/gittyai/llm"
 	"github.com/counhopig/gittyai/memory"
 	"github.com/counhopig/gittyai/orchestrator"
@@ -29,14 +28,14 @@ func NewBuilder(project *Project) *Builder {
 // BuildLLM creates an LLM provider from configuration
 func BuildLLM(cfg LLMConfig) (llm.LLM, error) {
 	switch cfg.Provider {
-	case "openai":
+	case ProviderOpenAI:
 		return llm.NewOpenAI(llm.Config{
 			APIKey:      cfg.APIKey,
 			Model:       cfg.Model,
 			Temperature: cfg.Temperature,
 			MaxTokens:   cfg.MaxTokens,
 		})
-	case "anthropic":
+	case ProviderAnthropic:
 		if cfg.Model == "" {
 			cfg.Model = "claude-3-haiku-20240307" // Set a reasonable default
 		}
@@ -46,16 +45,92 @@ func BuildLLM(cfg LLMConfig) (llm.LLM, error) {
 			Temperature: cfg.Temperature,
 			MaxTokens:   cfg.MaxTokens,
 		})
+	case ProviderAzureOpenAI:
+		return buildAzureOpenAI(cfg)
+	case ProviderOllama, ProviderLMStudio, ProviderGroq, ProviderTogether, ProviderDeepseek, ProviderOpenrouter, ProviderOpenAILike:
+		// Handle OpenAI-like providers
+		baseURL := cfg.BaseURL
+		model := cfg.Model
+
+		// Set default base URLs and models for known providers if not specified
+		if baseURL == "" {
+			switch cfg.Provider {
+			case ProviderOllama:
+				baseURL = "http://localhost:11434/v1"
+				if model == "" {
+					model = "llama3.2"
+				}
+			case ProviderLMStudio:
+				baseURL = "http://localhost:1234/v1"
+				if model == "" {
+					model = "local-model"
+				}
+			case ProviderGroq:
+				baseURL = "https://api.groq.com/openai/v1"
+				if model == "" {
+					model = "llama-3.1-70b-versatile"
+				}
+			case ProviderTogether:
+				baseURL = "https://api.together.xyz/v1"
+				if model == "" {
+					model = "meta-llama/Llama-3-70b-chat-hf"
+				}
+			case ProviderDeepseek:
+				baseURL = "https://api.deepseek.com/v1"
+				if model == "" {
+					model = "deepseek-chat"
+				}
+			case ProviderOpenrouter:
+				baseURL = "https://openrouter.ai/api/v1"
+				if model == "" {
+					model = "openai/gpt-4o-mini"
+				}
+			}
+		}
+
+		return llm.NewOpenAILike(llm.OpenAILikeConfig{
+			BaseURL:      baseURL,
+			APIKey:       cfg.APIKey,
+			Model:        model,
+			Temperature:  cfg.Temperature,
+			MaxTokens:    cfg.MaxTokens,
+			Headers:      cfg.Headers,
+			SystemPrompt: cfg.SystemPrompt,
+		})
 	default:
-		return nil, fmt.Errorf("unsupported LLM provider: %s", cfg.Provider)
+		return nil, errors.UnsupportedType(cfg.Provider).WithContext("provider", cfg.Provider)
 	}
+}
+
+// buildAzureOpenAI creates an Azure OpenAI LLM provider from configuration
+func buildAzureOpenAI(cfg LLMConfig) (llm.LLM, error) {
+	if cfg.Endpoint == "" {
+		return nil, errors.RequiredField("endpoint")
+	}
+	if cfg.DeploymentName == "" {
+		return nil, errors.RequiredField("deployment_name")
+	}
+
+	apiVersion := cfg.APIVersion
+	if apiVersion == "" {
+		apiVersion = "2024-02-15-preview"
+	}
+
+	return llm.NewAzureOpenAI(llm.AzureOpenAIConfig{
+		Endpoint:       cfg.Endpoint,
+		APIKey:         cfg.APIKey,
+		DeploymentName: cfg.DeploymentName,
+		APIVersion:     apiVersion,
+		Temperature:    cfg.Temperature,
+		MaxTokens:      cfg.MaxTokens,
+	})
 }
 
 // BuildAgents creates agents from configuration
 func (b *Builder) BuildAgents() error {
 	llmProvider, err := BuildLLM(b.project.LLM)
 	if err != nil {
-		return fmt.Errorf("failed to build LLM: %w", err)
+		return errors.Wrap(errors.ErrInvalidConfig, "failed to build LLM", err).WithContext("provider", b.project.LLM.Provider)
 	}
 
 	mem := memory.New()
@@ -81,7 +156,7 @@ func (b *Builder) BuildAgents() error {
 // BuildTasks creates tasks from configuration
 func (b *Builder) BuildTasks() error {
 	if len(b.agents) == 0 {
-		return fmt.Errorf("agents must be built before tasks")
+		return errors.InvalidConfig("build_order", "agents must be built before tasks")
 	}
 
 	// Create agent map for easy lookup
@@ -93,7 +168,7 @@ func (b *Builder) BuildTasks() error {
 	for _, taskCfg := range b.project.Tasks {
 		ag, exists := agentMap[taskCfg.Agent]
 		if !exists {
-			return fmt.Errorf("task '%s' references non-existent agent: %s", taskCfg.Description, taskCfg.Agent)
+			return errors.Configf("task '%s' references non-existent agent: %s", taskCfg.Description, taskCfg.Agent)
 		}
 
 		tsk := task.New(task.Config{

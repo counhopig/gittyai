@@ -5,23 +5,25 @@ import (
 	"os"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/counhopig/gittyai/errors"
 )
 
 // LoadYAML loads and parses a YAML configuration file
 func LoadYAML(path string) (*Project, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file %s: %w", path, err)
+		return nil, errors.Wrap(errors.ErrMissingConfig, fmt.Sprintf("failed to read file %s", path), err).WithContext("path", path)
 	}
 
 	project := &Project{}
 	if err := yaml.Unmarshal(data, project); err != nil {
-		return nil, fmt.Errorf("failed to parse YAML: %w", err)
+		return nil, errors.Wrap(errors.ErrInvalidConfig, "failed to parse YAML", err)
 	}
 
 	// Validate the parsed project
 	if err := project.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid project configuration: %w", err)
+		return nil, errors.Wrap(errors.ErrInvalidConfig, "invalid project configuration", err)
 	}
 
 	return project, nil
@@ -30,16 +32,16 @@ func LoadYAML(path string) (*Project, error) {
 // SaveYAML saves the project configuration to a YAML file
 func SaveYAML(project *Project, path string) error {
 	if err := project.Validate(); err != nil {
-		return fmt.Errorf("invalid project configuration: %w", err)
+		return errors.Wrap(errors.ErrInvalidConfig, "invalid project configuration", err)
 	}
 
 	data, err := yaml.Marshal(project)
 	if err != nil {
-		return fmt.Errorf("failed to marshal YAML: %w", err)
+		return errors.Wrap(errors.ErrInternal, "failed to marshal YAML", err)
 	}
 
 	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("failed to write file %s: %w", path, err)
+		return errors.Wrap(errors.ErrInternal, fmt.Sprintf("failed to write file %s", path), err).WithContext("path", path)
 	}
 
 	return nil
@@ -48,30 +50,30 @@ func SaveYAML(project *Project, path string) error {
 // Validate checks if the project configuration is valid
 func (p *Project) Validate() error {
 	if p.Project == "" {
-		return fmt.Errorf("project name is required")
+		return errors.RequiredField("project name")
 	}
 
 	if len(p.Agents) == 0 {
-		return fmt.Errorf("at least one agent is required")
+		return errors.Validation("at least one agent is required")
 	}
 
 	if len(p.Tasks) == 0 {
-		return fmt.Errorf("at least one task is required")
+		return errors.Validation("at least one task is required")
 	}
 
 	// Check that LLM config is set
 	if p.LLM.Provider == "" {
-		return fmt.Errorf("LLM provider is required")
+		return errors.RequiredField("LLM provider")
 	}
 
 	// Validate agents
 	agentNames := make(map[string]bool)
 	for _, agent := range p.Agents {
 		if agent.Name == "" {
-			return fmt.Errorf("agent name is required")
+			return errors.RequiredField("agent name")
 		}
 		if agentNames[agent.Name] {
-			return fmt.Errorf("duplicate agent name: %s", agent.Name)
+			return errors.Validationf("duplicate agent name: %s", agent.Name)
 		}
 		agentNames[agent.Name] = true
 	}
@@ -79,13 +81,13 @@ func (p *Project) Validate() error {
 	// Validate tasks
 	for _, task := range p.Tasks {
 		if task.Description == "" {
-			return fmt.Errorf("task description is required")
+			return errors.RequiredField("task description")
 		}
 		if task.Agent == "" {
-			return fmt.Errorf("task agent is required")
+			return errors.RequiredField("task agent")
 		}
 		if !agentNames[task.Agent] {
-			return fmt.Errorf("task references non-existent agent: %s", task.Agent)
+			return errors.Validationf("task references non-existent agent: %s", task.Agent)
 		}
 	}
 
