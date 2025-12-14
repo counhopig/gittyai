@@ -25,3 +25,7 @@ llm:
   model: gpt-4o-mini
   temperature: 0.7
   max_tokens: 2000
+  # Optional OpenAI-like fields (commented out as examples):
+  # system_prompt: "You are a helpful research assistant. Provide detailed and accurate information."
+  # headers:
+  #   "X-Custom-Header": "custom-value"

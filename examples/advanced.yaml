@@ -1,0 +1,128 @@
+# Advanced configuration example showcasing various LLM providers
+project: advanced-agent-demo
+version: 2.0
+
+agents:
+  - name: researcher
+    role: Senior Research Analyst
+    goal: Conduct in-depth research and analysis on technical topics
+    backstory: You are a senior research analyst with 10+ years of experience in technology research. You excel at breaking down complex topics and providing clear, actionable insights.
+    verbose: true
+    max_iter: 20
+    max_rpm: 15
+
+  - name: writer
+    role: Technical Writer
+    goal: Transform research findings into well-structured documents
+    backstory: You are an experienced technical writer who specializes in making complex topics accessible to both technical and non-technical audiences.
+    verbose: true
+    max_iter: 10
+
+tasks:
+  - description: Research the latest developments in quantum computing and its potential applications
+    expected_output: A comprehensive research report on quantum computing advancements
+    agent: researcher
+
+  - description: Write a blog post summarizing the quantum computing research findings for a general audience
+    expected_output: A 1000-word blog post suitable for a tech blog
+    agent: writer
+    context:
+      - "Use insights from the researcher's report"
+      - "Focus on practical applications and implications"
+
+execution:
+  process: sequential
+
+# Example 1: Using Ollama (local LLM)
+# llm:
+#   provider: ollama
+#   model: llama3.2
+#   base_url: http://localhost:11434/v1
+#   temperature: 0.7
+#   max_tokens: 2000
+#   system_prompt: "You are a helpful AI assistant. Provide detailed and accurate responses."
+
+# Example 2: Using Groq (fast inference)
+# llm:
+#   provider: groq
+#   api_key: ${GROQ_API_KEY}
+#   model: llama-3.1-70b-versatile
+#   temperature: 0.7
+#   max_tokens: 2000
+
+# Example 3: Using Deepseek
+# llm:
+#   provider: deepseek
+#   api_key: ${DEEPSEEK_API_KEY}
+#   model: deepseek-chat
+#   temperature: 0.8
+#   max_tokens: 4000
+
+# Example 4: Using Openrouter (multiple models)
+# llm:
+#   provider: openrouter
+#   api_key: ${OPENROUTER_API_KEY}
+#   model: openai/gpt-4o-mini
+#   temperature: 0.7
+#   max_tokens: 2000
+#   headers:
+#     "HTTP-Referer": "https://your-domain.com"
+#     "X-Title": "GittyAI Project"
+
+# Example 5: Using Together AI
+# llm:
+#   provider: together
+#   api_key: ${TOGETHER_API_KEY}
+#   model: meta-llama/Llama-3-70b-chat-hf
+#   temperature: 0.7
+#   max_tokens: 2000
+
+# Example 6: Using Azure OpenAI
+# llm:
+#   provider: azure-openai
+#   api_key: ${AZURE_OPENAI_API_KEY}
+#   endpoint: https://your-resource.openai.azure.com
+#   deployment_name: gpt-4o
+#   api_version: 2024-02-15-preview
+#   temperature: 0.7
+#   max_tokens: 2000
+
+# Example 7: Using LM Studio (local)
+# llm:
+#   provider: lmstudio
+#   model: local-model
+#   base_url: http://localhost:1234/v1
+#   temperature: 0.7
+#   max_tokens: 2000
+
+# Example 8: Generic OpenAI-compatible API
+# llm:
+#   provider: openai-like
+#   api_key: ${CUSTOM_API_KEY}
+#   model: custom-model
+#   base_url: https://api.custom-llm.com/v1
+#   temperature: 0.7
+#   max_tokens: 2000
+#   headers:
+#     "X-Custom-Header": "custom-value"
+
+# Example 9: Using Anthropic (Claude)
+llm:
+  provider: anthropic
+  api_key: ${ANTHROPIC_API_KEY}
+  model: claude-3-haiku-20240307
+  temperature: 0.7
+  max_tokens: 2000
+
+# Example 10: Using OpenAI (default)
+# llm:
+#   provider: openai
+#   api_key: ${OPENAI_API_KEY}
+#   model: gpt-4o
+#   temperature: 0.7
+#   max_tokens: 2000
+
+settings:
+  log_level: "info"
+  timeout_seconds: 300
+  max_retries: 3
