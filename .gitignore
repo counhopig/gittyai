@@ -42,5 +42,8 @@ examples/config_example
 *_local.yaml
 *_secret.yaml
 
+# Claude code
+.claude/
+
 # Ignore cmd binaries
 cmd/
