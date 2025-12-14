@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/counhopig/gittyai/errors"
 )
 
 // OpenAILikeConfig represents the configuration for OpenAI-compatible providers
@@ -38,11 +40,11 @@ type OpenAILike struct {
 // NewOpenAILike creates a new OpenAI-compatible LLM provider
 func NewOpenAILike(cfg OpenAILikeConfig) (*OpenAILike, error) {
 	if cfg.BaseURL == "" {
-		return nil, fmt.Errorf("baseURL is required")
+		return nil, errors.RequiredField("baseURL")
 	}
 
 	if cfg.Model == "" {
-		return nil, fmt.Errorf("model is required")
+		return nil, errors.RequiredField("model")
 	}
 
 	return &OpenAILike{
@@ -78,7 +80,7 @@ func (o *OpenAILike) Generate(ctx context.Context, prompt string) (string, error
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal request: %w", err)
+		return "", errors.Wrap(errors.ErrInternal, "failed to marshal request", err).WithContext("model", o.config.Model)
 	}
 
 	// Build the endpoint URL
@@ -91,7 +93,7 @@ func (o *OpenAILike) Generate(ctx context.Context, prompt string) (string, error
 
 	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(jsonData))
 	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
+		return "", errors.Wrap(errors.ErrInternal, "failed to create request", err).WithContext("url", endpoint)
 	}
 
 	// Set default headers
@@ -109,30 +111,30 @@ func (o *OpenAILike) Generate(ctx context.Context, prompt string) (string, error
 
 	resp, err := o.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("failed to call API: %w", err)
+		return "", errors.APICallError("call OpenAI-compatible API", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
+		return "", errors.Wrap(errors.ErrNetworkUnavail, "failed to read response", err).WithRetryable(true).WithTemporary(true)
 	}
 
 	var apiResp openAIResponse
 	if err := json.Unmarshal(body, &apiResp); err != nil {
-		return "", fmt.Errorf("failed to unmarshal response: %w", err)
+		return "", errors.Wrap(errors.ErrInternal, "failed to unmarshal response", err).WithContext("response_length", len(body))
 	}
 
 	if apiResp.Error != nil {
-		return "", fmt.Errorf("API error: %s", apiResp.Error.Message)
+		return "", errors.APIf("OpenAI-compatible API error: %s", apiResp.Error.Message)
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
+		return "", errors.APIf("OpenAI-compatible API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
 	if len(apiResp.Choices) == 0 {
-		return "", fmt.Errorf("no response from API")
+		return "", errors.API("no response from OpenAI-compatible API")
 	}
 
 	return apiResp.Choices[0].Message.Content, nil
@@ -167,13 +169,13 @@ func NewLMStudio(model string, baseURL ...string) (*OpenAILike, error) {
 // NewAzureOpenAI creates a new LLM provider for Azure OpenAI Service
 func NewAzureOpenAI(cfg AzureOpenAIConfig) (*OpenAILike, error) {
 	if cfg.Endpoint == "" {
-		return nil, fmt.Errorf("azure endpoint is required")
+		return nil, errors.RequiredField("azure endpoint")
 	}
 	if cfg.APIKey == "" {
-		return nil, fmt.Errorf("api key is required")
+		return nil, errors.RequiredField("api key")
 	}
 	if cfg.DeploymentName == "" {
-		return nil, fmt.Errorf("deployment name is required")
+		return nil, errors.RequiredField("deployment name")
 	}
 
 	apiVersion := cfg.APIVersion
@@ -248,7 +250,8 @@ func NewDeepseek(apiKey, model string) (*OpenAILike, error) {
 	})
 }
 
-func NewOpenrouter(apiKey, model string) (*OpenAILike, error) {
+// NewOpenRouter creates a new LLM provider for OpenRouter
+func NewOpenRouter(apiKey, model string) (*OpenAILike, error) {
 	if model == "" {
 		model = "openai/gpt-4o-mini"
 	}
