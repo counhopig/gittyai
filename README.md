@@ -11,12 +11,13 @@ Gitty is a lightweight, easy-to-use AI Agent framework written in Go. Inspired b
 - 🚀 **Simple & Intuitive**: Get started in minutes with minimal setup
 - 🤖 **Multi-Agent Orchestration**: Coordinate multiple agents with different roles
 - ⚡ **True Concurrency**: Built on Go's goroutines for parallel execution
-- 🎛️ **Flexible LLM Support**: Integrate with OpenAI, Anthropic, Ollama, Groq, Deepseek, and any OpenAI-compatible API
+- 🎛️ **Flexible LLM Support**: Integrate with OpenAI, Anthropic, Azure OpenAI, Ollama, Groq, Deepseek, OpenRouter, Together AI, LM Studio, and any OpenAI-compatible API
 - 💾 **Memory System**: Short-term and long-term memory for agents
 - 🔧 **Extensible**: Easy to add custom tools and integrations
 - 📄 **YAML Configuration**: Define agents and tasks in simple configuration files
-- 🌐 **OpenAI-Compatible API**: Support for any provider with OpenAI-compatible API (Azure, Ollama, LM Studio, vLLM, LocalAI, Together AI, etc.)
+- 🌐 **OpenAI-Compatible API**: Support for any provider with OpenAI-compatible API (Azure, Ollama, LM Studio, vLLM, LocalAI, Together AI, OpenRouter, etc.)
 - 🔌 **Plugin System**: Easy to add custom LLM providers and tools
+- 🛡️ **Structured Error Handling**: Comprehensive error types with context, severity levels, and retry logic
 
 ## Installation
 
@@ -112,11 +113,17 @@ execution:
   process: sequential
 
 llm:
-  provider: openai-like  # Supports: openai, anthropic, openai-like
+  provider: openai-like  # Supports: openai, anthropic, azure-openai, ollama, groq, deepseek, openrouter, together, lmstudio, openai-like
   api_key: "your-api-key-here"  # Configure as needed
-  base_url: "https://api.openai.com/v1"  # Required for openai-like
+  base_url: "https://api.openai.com/v1"  # Required for openai-like providers
   model: gpt-4o-mini
   temperature: 0.7
+  max_tokens: 2000
+  # Optional: Custom headers for OpenAI-compatible APIs
+  headers:
+    "X-Custom-Header": "custom-value"
+  # Optional: System prompt for OpenAI-like providers
+  system_prompt: "You are a helpful AI assistant"
 ```
 
 Then use it in your code:
@@ -250,6 +257,14 @@ anthropic := llm.NewAnthropic(llm.Config{
     Model:  "claude-3-sonnet-20240229",
 })
 
+// Azure OpenAI
+azureOpenAI := llm.NewAzureOpenAI(llm.AzureOpenAIConfig{
+    Endpoint:       "https://your-resource.openai.azure.com",
+    APIKey:         "your-azure-api-key",  // Configure as needed
+    DeploymentName: "gpt-4o",
+    APIVersion:     "2024-02-15-preview",
+})
+
 // Ollama (local LLM)
 ollama := llm.NewOpenAILike(llm.OpenAILikeConfig{
     BaseURL: "http://localhost:11434/v1",  // Configure your Ollama server
@@ -257,11 +272,11 @@ ollama := llm.NewOpenAILike(llm.OpenAILikeConfig{
     // APIKey is optional for local Ollama
 })
 
-// Groq
+// Groq (fast inference)
 groq := llm.NewOpenAILike(llm.OpenAILikeConfig{
     BaseURL: "https://api.groq.com/openai/v1",
     APIKey:  "your-groq-api-key",  // Configure as needed
-    Model:   "mixtral-8x7b-32768",
+    Model:   "llama-3.1-70b-versatile",
 })
 
 // Deepseek
@@ -271,13 +286,24 @@ deepseek := llm.NewOpenAILike(llm.OpenAILikeConfig{
     Model:   "deepseek-chat",
 })
 
+// OpenRouter (access to multiple models)
+openrouter := llm.NewOpenRouter("your-openrouter-api-key", "openai/gpt-4o-mini")
+
+// Together AI
+together := llm.NewTogether("your-together-api-key", "meta-llama/Llama-3-70b-chat-hf")
+
+// LM Studio (local)
+lmstudio := llm.NewLMStudio("local-model", "http://localhost:1234/v1")
+
 // Any OpenAI-compatible API
 custom := llm.NewOpenAILike(llm.OpenAILikeConfig{
-    BaseURL: "https://your-custom-api.com/v1",
-    APIKey:  "your-custom-api-key",  // Configure as needed
-    Model:   "your-model",
+    BaseURL:      "https://your-custom-api.com/v1",
+    APIKey:       "your-custom-api-key",  // Configure as needed
+    Model:        "your-model",
+    SystemPrompt: "You are a helpful assistant",  // Optional system prompt
     Headers: map[string]string{
         "X-Custom-Header": "value",  // Custom headers if needed
+        "HTTP-Referer":    "https://your-app.com",  // Required by some providers
     },
 })
 
@@ -330,6 +356,43 @@ agent := agent.New(agent.Config{
 })
 ```
 
+### Error Handling
+
+GittyAI provides structured error handling with rich context:
+
+```go
+import "github.com/counhopig/gittyai/errors"
+
+// Check error types
+if err != nil {
+    // Check if it's a structured error
+    if gittyErr, ok := err.(*errors.Error); ok {
+        // Access error details
+        fmt.Printf("Error Code: %s\n", gittyErr.Code)
+        fmt.Printf("Severity: %s\n", gittyErr.Severity)
+        fmt.Printf("Context: %v\n", gittyErr.Context)
+        fmt.Printf("Retryable: %v\n", gittyErr.Retryable)
+
+        // Check specific error types
+        if errors.IsRetryable(err) {
+            // Retry the operation
+        }
+
+        if errors.HasCode(err, errors.ErrInvalidConfig) {
+            // Handle configuration error
+        }
+    }
+}
+
+// Common error types include:
+// - ErrRequiredField: Missing required configuration
+// - ErrInvalidConfig: Invalid configuration values
+// - ErrAPICall: Failed API calls (automatically marked as retryable)
+// - ErrNetworkUnavail: Network issues (automatically marked as retryable)
+// - ErrUnsupported: Unsupported features or providers
+// - ErrInternal: Internal system errors
+```
+
 ## Project Structure
 
 ```
@@ -341,8 +404,10 @@ gittyai/
 ├── memory/         # Memory systems
 ├── tools/          # Tool integrations
 ├── config/         # Configuration parsing (YAML, builder)
+├── errors/         # Structured error handling with rich context
 └── examples/       # Example projects
     ├── simple.yaml      # Basic configuration example
+    ├── advanced.yaml    # Advanced multi-provider configuration example
     ├── api_example.go   # Programmatic API example
     └── config_example.go # Config-driven example
 ```
@@ -373,15 +438,19 @@ gittyai/
 
 ### LLM Configuration
 
-| Field         | Type    | Required | Description                            |
-| ------------- | ------- | -------- | -------------------------------------- |
-| `provider`    | string  | Yes      | LLM provider (openai, anthropic, openai-like) |
-| `api_key`     | string  | Yes*     | API key for the provider (*optional for local providers) |
-| `base_url`    | string  | No       | API endpoint URL (required for openai-like) |
-| `model`       | string  | No       | Model name (defaults vary by provider) |
-| `temperature` | float   | No       | Generation randomness (0.0-2.0)        |
-| `max_tokens`  | integer | No       | Maximum response tokens                |
-| `headers`     | object  | No       | Custom HTTP headers (openai-like only) |
+| Field            | Type    | Required | Description                                      |
+| ---------------- | ------- | -------- | ------------------------------------------------ |
+| `provider`       | string  | Yes      | LLM provider (openai, anthropic, azure-openai, ollama, groq, deepseek, openrouter, together, lmstudio, openai-like) |
+| `api_key`        | string  | Yes*     | API key for the provider (*optional for local providers) |
+| `base_url`       | string  | No       | API endpoint URL (required for openai-like providers) |
+| `model`          | string  | No       | Model name (defaults vary by provider)           |
+| `temperature`    | float   | No       | Generation randomness (0.0-2.0)                  |
+| `max_tokens`     | integer | No       | Maximum response tokens                          |
+| `system_prompt`  | string  | No       | System prompt for OpenAI-like providers          |
+| `headers`        | object  | No       | Custom HTTP headers (openai-like only)           |
+| `endpoint`       | string  | No       | Azure OpenAI endpoint (azure-openai only)        |
+| `deployment_name`| string  | No       | Azure OpenAI deployment name (azure-openai only) |
+| `api_version`    | string  | No       | Azure OpenAI API version (azure-openai only)     |
 
 ### Execution Configuration
 
@@ -393,9 +462,10 @@ gittyai/
 
 See the `examples/` directory for complete working examples:
 
+- **simple.yaml**: Basic configuration example with OpenAI
+- **advanced.yaml**: Advanced multi-provider configuration showcasing various LLM providers (Ollama, Groq, Deepseek, OpenRouter, Together AI, Azure OpenAI, Anthropic, and more)
 - **api_example.go**: Programmatic API usage
-- **config_example.go**: YAML configuration usage
-- **simple.yaml**: Example configuration file
+- **config_example.go**: Config-driven example
 
 ## Development
 
@@ -446,12 +516,3 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## Support
 
 For questions and support, please open an issue on the GitHub repository.
-
-## Recent Updates
-
-- Added OpenAI-compatible API support for Ollama, Groq, Deepseek, and other providers
-- Enhanced LLM configuration with `openai-like` provider type
-- Updated roadmap to reflect current progress
-- Improved documentation with more examples and configuration options
-
----
