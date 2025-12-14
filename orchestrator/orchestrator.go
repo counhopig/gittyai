@@ -3,12 +3,13 @@ package orchestrator
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	stderrors "errors"
 	"fmt"
 	"strings"
 	"sync"
 
 	"github.com/counhopig/gittyai/agent"
+	"github.com/counhopig/gittyai/errors"
 	"github.com/counhopig/gittyai/llm"
 	"github.com/counhopig/gittyai/task"
 )
@@ -74,7 +75,7 @@ func (o *Orchestrator) Kickoff(ctx context.Context) ([]*TaskResult, error) {
 	case Hierarchical:
 		return o.executeHierarchical(ctx)
 	default:
-		return nil, fmt.Errorf("unknown process type: %v", o.process)
+		return nil, errors.Unsupportedf("unknown process type: %v", o.process).WithContext("process", o.process)
 	}
 }
 
@@ -93,7 +94,9 @@ func (o *Orchestrator) executeSequential(ctx context.Context) ([]*TaskResult, er
 
 		result, err := o.executeTask(ctx, t)
 		if err != nil {
-			return results, fmt.Errorf("task %d failed: %w", i, err)
+			return results, errors.Wrap(errors.ErrInternal, fmt.Sprintf("task %d failed", i), err).
+				WithContext("task_index", i).
+				WithContext("agent", t.Agent.Name)
 		}
 
 		results = append(results, result)
@@ -126,7 +129,8 @@ func (o *Orchestrator) executeParallel(ctx context.Context) ([]*TaskResult, erro
 			result, taskErr := o.executeTask(ctx, t)
 			mu.Lock()
 			if taskErr != nil {
-				errs = append(errs, fmt.Errorf("task %d failed: %w", idx, taskErr))
+				errs = append(errs, errors.Wrap(errors.ErrInternal, fmt.Sprintf("task %d failed", idx), taskErr).
+					WithContext("task_index", idx))
 			} else {
 				results[idx] = result
 			}
@@ -137,7 +141,7 @@ func (o *Orchestrator) executeParallel(ctx context.Context) ([]*TaskResult, erro
 	wg.Wait()
 
 	if len(errs) > 0 {
-		return results, errors.Join(errs...)
+		return results, stderrors.Join(errs...)
 	}
 
 	return results, nil
@@ -146,11 +150,11 @@ func (o *Orchestrator) executeParallel(ctx context.Context) ([]*TaskResult, erro
 // executeHierarchical uses a manager LLM to intelligently orchestrate tasks
 func (o *Orchestrator) executeHierarchical(ctx context.Context) ([]*TaskResult, error) {
 	if o.managerLLM == nil {
-		return nil, fmt.Errorf("hierarchical mode requires a manager LLM")
+		return nil, errors.MissingConfig("manager_llm").WithContext("mode", "hierarchical")
 	}
 
 	if len(o.agents) == 0 {
-		return nil, fmt.Errorf("no agents available for orchestration")
+		return nil, errors.InvalidConfig("agents", "no agents available for orchestration").WithContext("mode", "hierarchical")
 	}
 
 	fmt.Println("\n[Hierarchical Mode] Manager is planning task execution...")
@@ -165,7 +169,9 @@ func (o *Orchestrator) executeHierarchical(ctx context.Context) ([]*TaskResult, 
 		return o.orchestrateFromGoal(ctx)
 	}
 
-	return nil, fmt.Errorf("hierarchical mode requires either tasks or a goal")
+	return nil, errors.InvalidConfig("hierarchical_mode", "requires either tasks or a goal").
+		WithContext("has_tasks", len(o.tasks) > 0).
+		WithContext("has_goal", o.goal != "")
 }
 
 // orchestratePredefinedTasks assigns agents to predefined tasks using manager LLM
@@ -187,7 +193,7 @@ func (o *Orchestrator) orchestratePredefinedTasks(ctx context.Context) ([]*TaskR
 			fmt.Printf("\n[Task %d/%d] Using assigned agent '%s' for: %s\n", i+1, len(o.tasks), t.Agent.Name, t.Description)
 			result, err := o.executeTask(ctx, t)
 			if err != nil {
-				return results, fmt.Errorf("task %d failed: %w", i, err)
+				return results, errors.Wrap(errors.ErrInternal, fmt.Sprintf("task %d failed", i), err).WithContext("task_index", i).WithContext("agent", t.Agent.Name)
 			}
 			results = append(results, result)
 			fmt.Printf("[Task %d/%d] Completed\n", i+1, len(o.tasks))
@@ -197,7 +203,9 @@ func (o *Orchestrator) orchestratePredefinedTasks(ctx context.Context) ([]*TaskR
 		// Ask manager to select the best agent
 		selectedAgent, err := o.selectAgentForTask(ctx, t, agentDescriptions)
 		if err != nil {
-			return results, fmt.Errorf("manager failed to select agent for task %d: %w", i, err)
+			return results, errors.Wrap(errors.ErrInternal, fmt.Sprintf("manager failed to select agent for task %d", i), err).
+				WithContext("task_index", i).
+				WithContext("task_description", t.Description)
 		}
 
 		fmt.Printf("\n[Task %d/%d] Manager assigned '%s' for: %s\n", i+1, len(o.tasks), selectedAgent.Name, t.Description)
@@ -268,7 +276,9 @@ func (o *Orchestrator) orchestrateFromGoal(ctx context.Context) ([]*TaskResult, 
 
 		result, err := o.executeTask(ctx, newTask)
 		if err != nil {
-			return results, fmt.Errorf("step %d failed: %w", i+1, err)
+			return results, errors.Wrap(errors.ErrInternal, fmt.Sprintf("task %d failed", i), err).
+				WithContext("task_index", i).
+				WithContext("agent", selectedAgent.Name)
 		}
 
 		results = append(results, result)
@@ -368,16 +378,16 @@ Keep the plan focused and efficient. Only include necessary steps.`, agentDescri
 	// Extract JSON from response
 	jsonStr := extractJSON(response)
 	if jsonStr == "" {
-		return nil, fmt.Errorf("manager did not return valid JSON plan")
+		return nil, errors.Internal("manager did not return valid JSON plan")
 	}
 
 	var plan []PlanStep
 	if err := json.Unmarshal([]byte(jsonStr), &plan); err != nil {
-		return nil, fmt.Errorf("failed to parse execution plan: %w", err)
+		return nil, errors.Wrap(errors.ErrInternal, "failed to parse execution plan", err).WithContext("response_length", len(jsonStr))
 	}
 
 	if len(plan) == 0 {
-		return nil, fmt.Errorf("manager returned empty plan")
+		return nil, errors.Internal("manager returned empty plan")
 	}
 
 	return plan, nil

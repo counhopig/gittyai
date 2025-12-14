@@ -4,21 +4,23 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/counhopig/gittyai/errors"
 	"github.com/counhopig/gittyai/llm"
 	"github.com/counhopig/gittyai/memory"
 )
 
+// Agent represents an AI agent with specific capabilities and behavior
 type Agent struct {
 	// Identity
-	Name     string
-	Role     string
-	Goal     string
+	Name      string
+	Role      string
+	Goal      string
 	Backstory string
 
 	// Behavior
-	Verbose    bool
-	MaxIter    int
-	MaxRPM     int
+	Verbose bool
+	MaxIter int
+	MaxRPM  int
 
 	// Memory
 	Memory memory.Memory
@@ -68,7 +70,7 @@ func New(cfg Config) *Agent {
 // Execute processes a task and returns the result
 func (a *Agent) Execute(ctx context.Context, taskDescription string) (string, error) {
 	if a.LLM == nil {
-		return "", fmt.Errorf("LLM provider not configured for agent %s", a.Name)
+		return "", errors.MissingConfig("LLM provider").WithContext("agent", a.Name)
 	}
 
 	// Build the prompt
@@ -77,7 +79,7 @@ func (a *Agent) Execute(ctx context.Context, taskDescription string) (string, er
 	// Call LLM
 	resp, err := a.LLM.Generate(ctx, prompt)
 	if err != nil {
-		return "", fmt.Errorf("agent %s failed to execute task: %w", a.Name, err)
+		return "", errors.Wrap(errors.ErrInternal, "failed to execute task", err).WithContext("agent", a.Name).WithContext("task_length", len(taskDescription))
 	}
 
 	// Store in memory

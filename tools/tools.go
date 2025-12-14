@@ -3,7 +3,8 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+
+	"github.com/counhopig/gittyai/errors"
 )
 
 // Tool defines the interface for an agent's tool
@@ -37,7 +38,7 @@ func NewRegistry() *Registry {
 func (r *Registry) Register(tool Tool) error {
 	name := tool.Name()
 	if _, exists := r.tools[name]; exists {
-		return fmt.Errorf("tool %s already registered", name)
+		return errors.Validationf("tool %s already registered", name)
 	}
 	r.tools[name] = tool
 	return nil
@@ -47,7 +48,7 @@ func (r *Registry) Register(tool Tool) error {
 func (r *Registry) Get(name string) (Tool, error) {
 	tool, exists := r.tools[name]
 	if !exists {
-		return nil, fmt.Errorf("tool %s not found", name)
+		return nil, errors.NotFound("tool", name)
 	}
 	return tool, nil
 }
@@ -90,8 +91,8 @@ func NewBaseTool(name, description string, args map[string]interface{}) *BaseToo
 	}
 }
 
-func (b *BaseTool) Name() string              { return b.name }
-func (b *BaseTool) Description() string       { return b.description }
+func (b *BaseTool) Name() string                 { return b.name }
+func (b *BaseTool) Description() string          { return b.description }
 func (b *BaseTool) Args() map[string]interface{} { return b.args }
 
 // ToolCall represents a call to a tool
@@ -104,7 +105,7 @@ type ToolCall struct {
 func ParseToolCall(data string) (*ToolCall, error) {
 	var call ToolCall
 	if err := json.Unmarshal([]byte(data), &call); err != nil {
-		return nil, fmt.Errorf("failed to parse tool call: %w", err)
+		return nil, errors.Wrap(errors.ErrInternal, "failed to parse tool call", err).WithContext("json_length", len(data))
 	}
 	return &call, nil
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/counhopig/gittyai/agent"
+	"github.com/counhopig/gittyai/errors"
 )
 
 // Task represents a unit of work to be completed
@@ -43,7 +44,7 @@ func (t *Task) WithAgent(a *agent.Agent) *Task {
 // Execute runs the task and returns the result
 func (t *Task) Execute(ctx context.Context) (string, error) {
 	if t.Agent == nil {
-		return "", fmt.Errorf("task '%s' has no agent assigned", t.Description)
+		return "", errors.Validationf("task '%s' has no agent assigned", t.Description)
 	}
 
 	// Build prompt from task description and expected output
@@ -54,7 +55,7 @@ func (t *Task) Execute(ctx context.Context) (string, error) {
 
 	result, err := t.Agent.Execute(ctx, prompt)
 	if err != nil {
-		return "", fmt.Errorf("task execution failed: %w", err)
+		return "", errors.Wrap(errors.ErrInternal, "task execution failed", err).WithContext("task_description", t.Description).WithContext("agent", t.Agent.Name)
 	}
 
 	return result, nil
