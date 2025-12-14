@@ -17,7 +17,7 @@ type OpenAILikeConfig struct {
 	APIKey string
 	// Model name to use
 	Model string
-	// Temperature for generation (0.0 to 2.0)
+	// Temperature for generation (0.0 to 1.0)
 	Temperature float32
 	// MaxTokens limits the response length
 	MaxTokens int
@@ -29,7 +29,7 @@ type OpenAILikeConfig struct {
 
 // OpenAILike implements the LLM interface for any OpenAI-compatible API
 // This includes: Azure OpenAI, Ollama, LM Studio, vLLM, LocalAI, Together AI,
-// Groq, Fireworks AI, Deepseek, and many other providers
+// Groq, Deepseek, Openrouter, and others.
 type OpenAILike struct {
 	config OpenAILikeConfig
 	client *http.Client
@@ -248,13 +248,12 @@ func NewDeepseek(apiKey, model string) (*OpenAILike, error) {
 	})
 }
 
-// NewFireworks creates a new LLM provider for Fireworks AI
-func NewFireworks(apiKey, model string) (*OpenAILike, error) {
+func NewOpenrouter(apiKey, model string) (*OpenAILike, error) {
 	if model == "" {
-		model = "accounts/fireworks/models/llama-v3p1-70b-instruct"
+		model = "openai/gpt-4o-mini"
 	}
 	return NewOpenAILike(OpenAILikeConfig{
-		BaseURL: "https://api.fireworks.ai/inference/v1",
+		BaseURL: "https://openrouter.ai/api/v1",
 		APIKey:  apiKey,
 		Model:   model,
 	})
